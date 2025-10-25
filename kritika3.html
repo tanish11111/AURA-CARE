@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Medicine Manager — Full Restored + Location Upgrades</title>
+<style>
+:root{
+  --primary:#2563eb; --surface:#f8fafc; --text:#1e293b; --muted:#64748b;
+  --success:#059669; --danger:#dc2626; --warning:#f59e0b;
+}
+*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+body{margin:0;background:var(--surface);color:var(--text);padding-bottom:90px}
+.header{background:linear-gradient(135deg,var(--primary),#1d4ed8);color:#fff;padding:18px 20px}
+.container{max-width:1100px;margin:18px auto;padding:12px}
+.tabs{display:flex;gap:8px;overflow:auto;margin:12px 0}
+.tab-btn{padding:10px 14px;border-radius:8px;border:2px solid #e2e8f0;background:#fff;cursor:pointer}
+.tab-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.card{background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;border:2px solid #e2e8f0}
+.med-card{border-left:6px solid var(--primary)}
+.med-time{background:#dbeafe;color:#1e40af;padding:8px;border-radius:8px;display:inline-block}
+.btn{padding:10px;border-radius:10px;border:none;cursor:pointer;font-weight:700}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-secondary{background:#e2e8f0}
+.grid{display:grid;grid-template-columns:1fr 360px;gap:12px;align-items:start}
+.side-box{position:sticky;top:100px}
+.small{font-size:14px;color:var(--muted)}
+.success-message{position:fixed;top:110px;left:50%;transform:translateX(-50%);background:var(--success);color:#fff;padding:12px 18px;border-radius:10px;display:none;z-index:50}
+.location-history-item{padding:10px;border-radius:8px;background:var(--surface);border:1px solid #e2e8f0;margin-bottom:8px}
+.notice{background:#fffbe6;border-left:4px solid var(--warning);padding:8px;border-radius:6px}
+.map-box{height:300px;border:1px solid #e2e8f0;border-radius:8px;margin-top:8px;overflow:hidden}
+.input{width:100%;padding:10px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:8px}
+@media(max-width:920px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>💊 Medicine Manager — Restored & Upgraded</h1>
+    <div class="small">All original features restored. Location tracking upgraded. Phone & medicines now user-configurable.</div>
+  </div>
+
+  <div class="success-message" id="successMessage">✓ Saved</div>
+
+  <div class="container">
+    <div class="tabs" role="tablist">
+      <button class="tab-btn active" onclick="showTab('today',this)">📅 Today's</button>
+      <button class="tab-btn" onclick="showTab('all',this)">📋 All</button>
+      <button class="tab-btn" onclick="showTab('add',this)">➕ Add</button>
+      <button class="tab-btn" onclick="showTab('location',this)">📍 Location</button>
+      <button class="tab-btn" onclick="showTab('history',this)">📊 History</button>
+    </div>
+
+    <div class="grid">
+      <div id="main-column">
+        <!-- TODAY -->
+        <div id="tab-today" class="card tab active">
+          <h2>Today's Schedule</h2>
+          <div id="todayMedicines" class="small">No medicines scheduled for today.</div>
+        </div>
+
+        <!-- ALL -->
+        <div id="tab-all" class="card tab" style="display:none">
+          <h2>All Medicines</h2>
+          <div id="allMedicines" class="small">No medicines added yet.</div>
+          <div style="margin-top:12px">
+            <label class="small">Caregiver Phone (optional)</label>
+            <div style="display:flex;gap:8px;margin-top:6px">
+              <input id="caregiverPhone" class="input" placeholder="Enter caregiver/phone to save (e.g., +91...)" />
+              <button class="btn btn-primary" onclick="saveCaregiver()">Save</button>
+            </div>
+            <div id="phoneSavedMsg" class="small" style="margin-top:8px"></div>
+          </div>
+        </div>
+
+        <!-- ADD -->
+        <div id="tab-add" class="card tab" style="display:none">
+          <h2>Add Medicine</h2>
+          <form id="addMedicineForm" onsubmit="handleAdd(event)">
+            <label class="small">Medicine Name</label>
+            <input id="medName" class="input" required placeholder="e.g., Metformin" />
+
+            <label class="small">Dosage</label>
+            <input id="medDosage" class="input" placeholder="e.g., 500mg" />
+
+            <label class="small">Frequency / Times (comma separated, 24h)</label>
+            <input id="medTimes" class="input" placeholder="e.g., 08:00, 20:00" />
+
+            <label class="small">Purpose</label>
+            <input id="medPurpose" class="input" placeholder="e.g., Blood sugar control" />
+
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn btn-primary" type="submit">✓ Save & Analyse</button>
+              <button class="btn btn-secondary" onclick="quickSearch(event)">🔎 Quick Google Lookup</button>
+            </div>
+          </form>
+
+          <div id="aiAnalysisBox" style="margin-top:12px"></div>
+
+        </div>
+
+        <!-- LOCATION (moved here also but main controls are in the restored location tab) -->
+        <div id="tab-location" class="card tab" style="display:none">
+          <h2>Location & Safe Zones</h2>
+          <div class="notice small">This demo stores location data locally in your browser. Enable continuous tracking only with consent. Map and playback use Google Maps embed (view-only).</div>
+
+          <div style="margin-top:12px">
+            <label><input type="checkbox" id="enableWatch"> Enable continuous location tracking (watchPosition)</label>
+          </div>
+
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="requestLocation()">Get Current Location</button>
+            <button class="btn btn-secondary" onclick="clearLocationHistory()">Clear Location History</button>
+            <button class="btn btn-secondary" onclick="playbackHistory()">▶ Playback Route</button>
+          </div>
+
+          <h3 style="margin-top:12px">Map View</h3>
+          <div id="mapBox" class="map-box"><div style="padding:12px" class="small">Map will appear here once a location is recorded.</div></div>
+
+          <h3 style="margin-top:12px">Location History (most recent first)</h3>
+          <div id="locationHistory" class="small">No location history.</div>
+        </div>
+
+        <!-- HISTORY -->
+        <div id="tab-history" class="card tab" style="display:none">
+          <h2>Medication History</h2>
+          <div id="historyList" class="small">No medication history yet.</div>
+        </div>
+      </div>
+
+      <!-- RIGHT SIDE PANEL -->
+      <div class="side-box">
+        <!-- Lookup Panel -->
+        <div class="card">
+          <h3>Medicine Lookup Panel</h3>
+          <div class="small">Use the Add → Quick Google Lookup button to load information here. If embedding is blocked, a link will be provided.</div>
+          <div id="lookupContainer" style="height:360px;overflow:hidden;border-radius:8px;margin-top:8px;background:#fff;border:1px solid #e2e8f0">
+            <div id="lookupFallback" style="padding:12px">
+              <div class="small">No lookup performed yet.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Panel -->
+        <div class="card" style="margin-top:12px">
+          <h3>Geriatric AI - Quick Facts</h3>
+          <div class="small">On-device, conservative knowledge base for quick checks (non-diagnostic).</div>
+          <div id="aiQuickFacts" style="margin-top:10px" class="small"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* =========================
+   Data storage & defaults
+   ========================= */
+// Start with an EMPTY medicines list (user will add).
+let medicines = JSON.parse(localStorage.getItem('demo_medicines') || '[]'); // each {id,name,dosage,times:[],purpose,active}
+// History of taken meds:
+let history = JSON.parse(localStorage.getItem('demo_history') || '[]');
+// Location history:
+let locationHistory = JSON.parse(localStorage.getItem('demo_location_history') || '[]');
+// Caregiver phone:
+let caregiverPhone = localStorage.getItem('demo_caregiver_phone') || '';
+
+/* =========================
+   Small on-device geriatric KB
+   (conservative, non-diagnostic)
+   ========================= */
+const geriatricKB = [
+  {condition:'Hypertension',commonSigns:['high BP','headache','dizziness'],commonMeds:['Amlodipine','Losartan','Lisinopril'],monitor:['BP monthly'],'redFlags':['sudden chest pain','syncope']},
+  {condition:'Type 2 Diabetes',commonSigns:['thirst','polyuria','fatigue'],commonMeds:['Metformin','Insulin','SGLT2 inhibitors'],monitor:['HbA1c every 3 months','renal function'],'redFlags':['sudden vision loss','ketoacidosis']},
+  {condition:'Osteoporosis',commonSigns:['height loss','back pain','fractures'],commonMeds:['Vitamin D','Calcium','Bisphosphonates'],monitor:['bone density scan'],'redFlags':['sudden severe back pain']},
+  {condition:'Coronary artery disease',commonSigns:['chest pain','shortness of breath'],commonMeds:['Aspirin','Atorvastatin','Beta blockers'],monitor:['lipid profile'],'redFlags':['crushing chest pain']}
+];
+
+/* =========================
+   UI helpers / rendering
+   ========================= */
+function showTab(name, btn){
+  document.querySelectorAll('.tab').forEach(t => t.style.display = 'none');
+  const id = 'tab-' + name;
+  const node = document.getElementById(id);
+  if(node) node.style.display = 'block';
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  // Post-open renders
+  if(name === 'all'){ renderAll(); }
+  if(name === 'today'){ renderToday(); }
+  if(name === 'history'){ renderHistory(); }
+  if(name === 'location'){ renderMap(); renderLocationHistory(); }
+}
+
+/* Render today's schedule by checking times (simple: show all times) */
+function renderToday(){
+  const el = document.getElementById('todayMedicines');
+  if(!medicines || medicines.length === 0){ el.innerHTML = '<div class="small">No medicines scheduled for today.</div>'; return; }
+  let html = '';
+  medicines.filter(m => m.active !== false).forEach(m => {
+    (m.times || []).forEach(t => {
+      html += `<div class="med-card card" style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between">
+          <div>
+            <div style="font-weight:700">${escapeHtml(m.name)}</div>
+            <div class="small">${escapeHtml(m.dosage || '')} • ${escapeHtml(m.purpose || '')}</div>
+          </div>
+          <div>
+            <div class="med-time">${escapeHtml(t)}</div>
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <button class="btn btn-primary" onclick="markTaken(${m.id},'${encodeURIComponent(t)}')">✓ I took this</button>
+          <button class="btn btn-secondary" onclick="showDetails(${m.id})">Details</button>
+          <button class="btn btn-secondary" onclick="editMedicine(${m.id})">Edit</button>
+          <button class="btn btn-secondary" onclick="deleteMedicine(${m.id})">Delete</button>
+        </div>
+      </div>`;
+    });
+  });
+  el.innerHTML = html || '<div class="small">No medicines scheduled for today.</div>';
+}
+
+/* Render all medicines */
+function renderAll(){
+  const el = document.getElementById('allMedicines');
+  if(!medicines || medicines.length === 0){ el.innerHTML = '<div class="small">No medicines added yet. Add medicines in the Add tab.</div>'; return; }
+  let html = medicines.map(m => {
+    return `<div class="card med-card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700">${escapeHtml(m.name)}</div>
+          <div class="small">${escapeHtml(m.dosage || '')} • ${escapeHtml(m.purpose || '')}</div>
+        </div>
+        <div>${(m.times || []).map(t => `<div class="med-time" style="margin-left:6px;display:inline-block">${escapeHtml(t)}</div>`).join(' ')}</div>
+      </div>
+      <div style="margin-top:8px">
+        <button class="btn btn-primary" onclick="showDetails(${m.id})">Full Details</button>
+        <button class="btn btn-secondary" onclick="editMedicine(${m.id})">Edit</button>
+        <button class="btn btn-secondary" onclick="deleteMedicine(${m.id})">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+  el.innerHTML = html;
+  // Show stored caregiver phone if any
+  const phoneMsg = document.getElementById('phoneSavedMsg');
+  if(phoneMsg){
+    caregiverPhone = localStorage.getItem('demo_caregiver_phone') || '';
+    phoneMsg.textContent = caregiverPhone ? `Saved caregiver phone: ${caregiverPhone}` : 'No caregiver phone saved.';
+  }
+}
+
+/* Render history */
+function renderHistory(){
+  const el = document.getElementById('historyList');
+  if(!history || history.length === 0){ el.innerHTML = '<div class="small">No medication history yet.</div>'; return; }
+  el.innerHTML = history.map(h => `<div class="history-item" style="padding:10px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:8px">
+    <div style="font-weight:600">${escapeHtml(h.medicine)}</div>
+    <div class="small">${escapeHtml(h.date)} — ${escapeHtml(h.status)}${h.note?(' • '+escapeHtml(h.note)) : ''}</div>
+  </div>`).join('');
+}
+
+/* Show med details */
+function showDetails(id){
+  const m = medicines.find(x => x.id === id);
+  if(!m) return alert('Medicine not found');
+  alert(`${m.name}\nDosage: ${m.dosage || 'N/A'}\nTimes: ${(m.times || []).join(', ')}\nPurpose: ${m.purpose || 'N/A'}`);
+}
+
+/* Mark taken */
+function markTaken(id, tEncoded){
+  const m = medicines.find(x => x.id === id);
+  if(!m) return;
+  const t = decodeURIComponent(tEncoded || '');
+  const now = new Date();
+  history.unshift({date: now.toLocaleString('en-IN'), medicine: m.name, status: 'taken', time: t});
+  if(history.length > 500) history.pop();
+  localStorage.setItem('demo_history', JSON.stringify(history));
+  document.getElementById('successMessage').textContent = '✓ Marked taken';
+  document.getElementById('successMessage').style.display = 'block';
+  setTimeout(()=>{ document.getElementById('successMessage').style.display = 'none'; document.getElementById('successMessage').textContent = '✓ Saved'; }, 1400);
+  renderHistory();
+}
+
+/* Edit / Delete */
+function editMedicine(id){
+  const m = medicines.find(x => x.id === id);
+  if(!m) return alert('Not found');
+  // Fill add form for editing
+  document.getElementById('medName').value = m.name;
+  document.getElementById('medDosage').value = m.dosage || '';
+  document.getElementById('medTimes').value = (m.times || []).join(', ');
+  document.getElementById('medPurpose').value = m.purpose || '';
+  // switch to add tab
+  showTab('add', document.querySelectorAll('.tab-btn')[2]);
+  // Remove old med on save and create new one (simple approach)
+  deleteMedicine(id, false); // remove from list but don't render full yet
+}
+
+function deleteMedicine(id, confirmPrompt = true){
+  if(confirmPrompt){
+    if(!confirm('Delete this medicine?')) return;
+  }
+  medicines = medicines.filter(x => x.id !== id);
+  localStorage.setItem('demo_medicines', JSON.stringify(medicines));
+  renderAll(); renderToday();
+}
+
+/* Add medicine handler */
+function handleAdd(e){
+  e.preventDefault();
+  const name = document.getElementById('medName').value.trim();
+  if(!name) return alert('Enter medicine name');
+  const dosage = document.getElementById('medDosage').value.trim();
+  const times = document.getElementById('medTimes').value.split(',').map(s => s.trim()).filter(Boolean);
+  const purpose = document.getElementById('medPurpose').value.trim();
+  const newMed = { id: Date.now(), name, dosage, times, purpose, active: true };
+  medicines.push(newMed);
+  localStorage.setItem('demo_medicines', JSON.stringify(medicines));
+  // clear form
+  document.getElementById('addMedicineForm').reset();
+  // show AI analysis and success
+  showAiAnalysisForMedicine(name, newMed);
+  document.getElementById('successMessage').textContent = '✓ Medicine added';
+  document.getElementById('successMessage').style.display = 'block';
+  setTimeout(()=>{ document.getElementById('successMessage').style.display = 'none'; document.getElementById('successMessage').textContent = '✓ Saved'; }, 1400);
+  renderAll(); renderToday();
+}
+
+/* Quick search into right panel (iframe attempt + fallback link) */
+function quickSearch(e){
+  if(e) e.preventDefault();
+  const name = document.getElementById('medName').value.trim();
+  if(!name) return alert('Type medicine name first');
+  const q = encodeURIComponent(name + ' medicine uses downsides frequency side effects dosage');
+  const iframe = document.createElement('iframe');
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
+  iframe.style.border = '0';
+  iframe.loading = 'lazy';
+  iframe.title = 'Medicine Lookup';
+  // Google embed attempt (often blocked). Fallback handled after timeout.
+  iframe.src = `https://www.google.com/search?q=${q}`;
+  const container = document.getElementById('lookupContainer');
+  container.innerHTML = '';
+  container.appendChild(iframe);
+  // fallback if blocked (cross-origin will throw when checking)
+  setTimeout(()=>{
+    try{
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      // If we can access and document has content, assume embed works.
+      if(!doc || !doc.body || !doc.body.innerHTML || doc.body.innerHTML.length < 20){
+        throw new Error('embed empty');
+      }
+    }catch(err){
+      container.innerHTML = `<div style="padding:12px"><div class="small">Unable to embed Google search due to browser restrictions. <a target="_blank" rel="noopener" href="https://www.google.com/search?q=${q}">Open search in new tab</a></div></div>`;
+    }
+  },900);
+}
+
+/* =========================
+   Geriatric AI analysis (simple heuristic)
+   ========================= */
+function aiSuggestByMedicine(name){
+  const key = name.toLowerCase();
+  let suggestions = [];
+  for(const item of geriatricKB){
+    if(item.commonMeds.map(m => m.toLowerCase()).includes(key) || item.condition.toLowerCase().includes(key)){
+      suggestions.push({condition:item.condition,summary:`Commonly used for ${item.condition}`,monitor:item.monitor,redFlags:item.redFlags});
+    }
+  }
+  // fuzzy heuristic
+  if(key.includes('statin')) suggestions.push({condition:'Hyperlipidemia',summary:'Statins reduce cholesterol; monitor LFTs',monitor:['LFTs periodically'],redFlags:['muscle pain unrelieved']});
+  if(key.includes('insulin')) suggestions.push({condition:'Diabetes',summary:'Insulin used for glycemic control; risk of hypoglycemia',monitor:['blood glucose monitoring'],'redFlags':['severe hypoglycemia']});
+  return suggestions;
+}
+
+function showAiAnalysisForMedicine(name, med){
+  const box = document.getElementById('aiAnalysisBox');
+  box.innerHTML = '';
+  const suggestions = aiSuggestByMedicine(name);
+  let html = `<div class="card"><div style="font-weight:700">AI Quick Analysis for ${escapeHtml(name)}</div><div class="small">Non-diagnostic. Consult clinician for clinical decisions.</div><div style="margin-top:8px">`;
+  if(suggestions.length === 0){
+    html += `<div class="small">No direct matches in on-device geriatric KB. Common checks: renal function, liver function, fall risk, drug interactions.</div>`;
+  } else {
+    suggestions.forEach(s => {
+      html += `<div style="margin-top:8px"><div style="font-weight:600">Related: ${escapeHtml(s.condition)}</div><div class="small">${escapeHtml(s.summary)}</div><div style="margin-top:6px"><strong>Monitoring:</strong> ${escapeHtml((s.monitor||[]).join(', '))}</div><div style="margin-top:6px"><strong>Red flags:</strong> ${escapeHtml((s.redFlags||[]).join(', '))}</div></div>`;
+    });
+  }
+  html += `</div></div>`;
+  box.innerHTML = html;
+  updateAiQuickFacts(name, suggestions);
+}
+
+/* Keep a short summary in the right-side AI box */
+function updateAiQuickFacts(name, suggestions){
+  const el = document.getElementById('aiQuickFacts');
+  if(!suggestions || suggestions.length === 0){
+    el.innerHTML = `<div class="small">No immediate geriatric alerts for <strong>${escapeHtml(name)}</strong>. Check renal/liver when starting new meds.</div>`;
+    return;
+  }
+  el.innerHTML = suggestions.map(s => `<div style="margin-bottom:8px"><div style="font-weight:700">${escapeHtml(s.condition)}</div><div class="small">Monitor: ${escapeHtml((s.monitor||[]).join(', '))}. Red flags: ${escapeHtml((s.redFlags||[]).join(', '))}</div></div>`).join('');
+}
+
+/* =========================
+   Location tracking & map
+   ========================= */
+let watchId = null;
+
+function requestLocation(){
+  if(!('geolocation' in navigator)) return alert('Geolocation not supported by this browser');
+  navigator.geolocation.getCurrentPosition(pos => {
+    addLocationHistory(pos.coords);
+    renderMap();
+  }, err => alert('Unable to get location: ' + err.message), {enableHighAccuracy:true, maximumAge:10000, timeout:10000});
+}
+
+function startWatch(){
+  if(watchId) return;
+  if(!('geolocation' in navigator)) return alert('Geolocation not supported');
+  watchId = navigator.geolocation.watchPosition(pos => {
+    addLocationHistory(pos.coords);
+    renderMap();
+  }, err => console.warn('watch error', err), {enableHighAccuracy:true, maximumAge:5000, timeout:10000});
+}
+
+function stopWatch(){
+  if(watchId){
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+  }
+}
+
+document.getElementById('enableWatch').addEventListener('change', e => {
+  if(e.target.checked) startWatch(); else stopWatch();
+});
+
+function addLocationHistory(coords){
+  locationHistory.unshift({lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy || null, t: new Date().toISOString()});
+  if(locationHistory.length > 200) locationHistory.pop();
+  localStorage.setItem('demo_location_history', JSON.stringify(locationHistory));
+  renderLocationHistory();
+}
+
+function renderLocationHistory(){
+  const el = document.getElementById('locationHistory');
+  if(!locationHistory || locationHistory.length === 0){ el.innerHTML = '<div class="small">No location history.</div>'; return; }
+  el.innerHTML = locationHistory.map(l => `<div class="location-history-item"><div style="font-weight:600">${new Date(l.t).toLocaleString()}</div><div class="small">Lat ${l.lat.toFixed(6)}, Lng ${l.lng.toFixed(6)} • accuracy ${l.accuracy ? (l.accuracy.toFixed(0)+'m') : 'n/a'}</div></div>`).join('');
+}
+
+/* Map rendering using Google Maps embed with latest point */
+function renderMap(){
+  const mapBox = document.getElementById('mapBox');
+  if(!mapBox) return;
+  if(!locationHistory || locationHistory.length === 0){
+    mapBox.innerHTML = '<div style="padding:12px" class="small">No locations yet. Use Get Current Location or enable tracking.</div>'; return;
+  }
+  const latest = locationHistory[0];
+  const lat = latest.lat.toFixed(6), lng = latest.lng.toFixed(6);
+  const mapUrl = `https://maps.google.com/maps?q=${lat},${lng}&z=15&output=embed`;
+  mapBox.innerHTML = `<iframe src="${mapUrl}" width="100%" height="100%" style="border:0;border-radius:8px"></iframe>`;
+}
+
+/* Playback route (iterates over history) */
+function playbackHistory(){
+  if(!locationHistory || locationHistory.length < 2) return alert('Not enough points for playback');
+  let i = 0;
+  const mapBox = document.getElementById('mapBox');
+  const total = locationHistory.length;
+  const timer = setInterval(() => {
+    if(i >= total){ clearInterval(timer); return; }
+    const l = locationHistory[i];
+    const mapUrl = `https://maps.google.com/maps?q=${l.lat.toFixed(6)},${l.lng.toFixed(6)}&z=16&output=embed`;
+    mapBox.innerHTML = `<iframe src="${mapUrl}" width="100%" height="100%" style="border:0;border-radius:8px"></iframe>`;
+    i++;
+  }, 1400);
+}
+
+/* Clear location history */
+function clearLocationHistory(){
+  if(!confirm('Clear stored location history?')) return;
+  locationHistory = [];
+  localStorage.removeItem('demo_location_history');
+  renderLocationHistory();
+  renderMap();
+}
+
+/* =========================
+   Caregiver phone storage
+   ========================= */
+function saveCaregiver(){
+  const v = document.getElementById('caregiverPhone').value.trim();
+  if(!v) { localStorage.removeItem('demo_caregiver_phone'); caregiverPhone = ''; alert('Caregiver phone cleared'); renderAll(); return; }
+  caregiverPhone = v;
+  localStorage.setItem('demo_caregiver_phone', caregiverPhone);
+  document.getElementById('phoneSavedMsg').textContent = 'Saved caregiver phone: ' + caregiverPhone;
+}
+
+/* =========================
+   Utilities
+   ========================= */
+function escapeHtml(s){
+  if(!s && s !== 0) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/* =========================
+   Initial UI populate
+   ========================= */
+function init(){
+  // Ensure medicines and history saved to localStorage variables exist
+  localStorage.setItem('demo_medicines', JSON.stringify(medicines));
+  localStorage.setItem('demo_history', JSON.stringify(history));
+  localStorage.setItem('demo_location_history', JSON.stringify(locationHistory));
+  // show caregiver phone if present
+  const savedPhone = localStorage.getItem('demo_caregiver_phone') || '';
+  if(savedPhone) document.getElementById('phoneSavedMsg').textContent = 'Saved caregiver phone: ' + savedPhone;
+  // small AI panel populate
+  const aiBox = document.getElementById('aiQuickFacts');
+  aiBox.innerHTML = geriatricKB.slice(0,3).map(k => `<div style="margin-bottom:8px"><div style="font-weight:700">${k.condition}</div><div class="small">${k.commonMeds.join(', ')} • red flags: ${k.redFlags.slice(0,2).join(', ')}</div></div>`).join('');
+  // initial renders
+  renderAll(); renderToday(); renderHistory(); renderLocationHistory(); renderMap();
+}
+
+// init on load
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
